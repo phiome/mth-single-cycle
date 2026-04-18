@@ -18,42 +18,39 @@ module riscv_singlecycle import riscv_pkg::*; #(
     output logic              mem_wrt_o    // retired memory write enable
 );
 
-    // ===========================================================================
-    // 1. BELLEK (MEMORY) TANIMLAMALARI VE İLKLENDİRME
-    // ===========================================================================
-    // Her biri 32-bit (XLEN) genişliğinde 2048 satırlık bellek dizileri (8 KB)
+
+    // 1. Memory Definitions
+
+    // 32 bit width and 2048 entries (8kb) 
     logic [XLEN-1:0] instr_mem [0:2047];
     logic [XLEN-1:0] data_mem  [0:2047];
 
-    // PDF Kuralı: readmemh ile başlatma
     initial begin
         $readmemh(IMemInitFile, instr_mem, 0, 2047);
         $readmemh(DMemInitFile, data_mem, 0, 2047);
     end
 
-    // Testbench'in arkadan belleği okuması için gerekli atama
     assign data_o = data_mem[addr_i[12:2]]; 
 
-    // ===========================================================================
-    // 2. PROGRAM COUNTER (PC) VE FETCH MANTIĞI
-    // ===========================================================================
+    // 2. PROGRAM COUNTER VE FETCH LOGIC
+
     logic [31:0] pc_reg;
     logic [31:0] next_pc;
     logic [31:0] instr_w;
 
-    // Saat sinyaline bağlı PC güncellemesi (Reset'te 0'a döner)
+
     always_ff @(posedge clk_i or negedge rstn_i) begin
         if (!rstn_i) pc_reg <= 32'h80000000;
         else         pc_reg <= next_pc;
     end
 
-    // Instruction Memory'den komut çekme (Fetch). PC 4'er arttığı için 4'e bölüyoruz (>> 2)
+    // shift by 2 
     assign instr_w = instr_mem[pc_reg[12:2]];
 
 
-    // ===========================================================================
-    // 3. DECODER (KONTROL BİRİMİ) BAĞLANTILARI
-    // ===========================================================================
+
+    // 3. DECODER CONNECTIONS
+    
     logic [4:0]  rs1_addr_w, rs2_addr_w, rd_addr_w;
     logic [31:0] imm_w;
     logic        reg_we_w, alu_src_w, pc_to_alu_w, mem_we_w, branch_w, jump_w, jalr_w;
@@ -61,7 +58,7 @@ module riscv_singlecycle import riscv_pkg::*; #(
     logic [3:0]  alu_ctrl_w;
     logic [2:0]  funct3_w;
     logic [2:0]  unused_branch_type;
-    // Custom ISA'na göre funct3 her zaman [7:5] bitleri arasındadır
+    // funct3
     assign funct3_w = instr_w[7:5];
 
     decoder u_decoder (
@@ -78,15 +75,14 @@ module riscv_singlecycle import riscv_pkg::*; #(
         .mem_we_o      (mem_we_w),
         .wb_sel_o      (wb_sel_w),
         .branch_o      (branch_w),
-        .branch_type_o (unused_branch_type), // Doğrudan funct3_w kullanacağımız için boşa çıkarıyoruz
+        .branch_type_o (unused_branch_type), // connected to dummy branch for not taking any failures
         .jump_o        (jump_w),
         .jalr_o        (jalr_w)
     );
 
 
-    // ===========================================================================
-    // 4. REGISTER FILE BAĞLANTILARI
-    // ===========================================================================
+    // 4. REGISTER FILE CONNECTIONS
+
     logic [31:0] rs1_data_w, rs2_data_w, wb_data_w;
 
     register_file u_regfile (
@@ -102,15 +98,13 @@ module riscv_singlecycle import riscv_pkg::*; #(
     );
 
 
-    // ===========================================================================
-    // 5. ALU BAĞLANTILARI
-    // ===========================================================================
-    logic [31:0] alu_a_w, alu_b_w, alu_res_w;
-    logic        alu_zero_w; // Aslında dallanma için alttaki özel mantığı kullanacağız
+    // 5. ALU CONNECIONS
 
-    // MUX: ALU'nun A girişine PC mi gidecek, RS1 mi?
+    logic [31:0] alu_a_w, alu_b_w, alu_res_w;
+    logic        alu_zero_w; 
+
+    
     assign alu_a_w = pc_to_alu_w ? pc_reg : rs1_data_w;
-    // MUX: ALU'nun B girişine Immediate mı gidecek, RS2 mi?
     assign alu_b_w = alu_src_w ? imm_w : rs2_data_w;
 
     alu u_alu (
@@ -122,12 +116,11 @@ module riscv_singlecycle import riscv_pkg::*; #(
     );
 
 
-    // ===========================================================================
-    // 6. DALLANMA (BRANCH) MANTIĞI & NEXT_PC HESAPLAMA
-    // ===========================================================================
+    
+    // 6.BRANCH Logic and NEXT_PC calculatıon
+    
     logic branch_taken;
     
-    // ALU yerine karşılaştırmaları burada yapmak daha güvenlidir
     always_comb begin
         branch_taken = 1'b0;
         if (branch_w) begin
@@ -143,29 +136,26 @@ module riscv_singlecycle import riscv_pkg::*; #(
         end
     end
 
-    // Bir sonraki PC'nin ne olacağına karar veren MUX ağı
+    // next PC MUX 
     always_comb begin
         if (jalr_w)
-            next_pc = (rs1_data_w + imm_w) & ~32'b1; // JALR kuralı: son bit 0 yapılır
+            next_pc = (rs1_data_w + imm_w) & ~32'b1; // JALR rule: last bit will be 0
         else if (jump_w || branch_taken)
-            next_pc = pc_reg + imm_w;                // JAL veya Koşul sağlandıysa atla
+            next_pc = pc_reg + imm_w;                
         else
-            next_pc = pc_reg + 32'd4;                // Normal işleyiş
+            next_pc = pc_reg + 32'd4;                
     end
 
 
-    // ===========================================================================
-    // 7. DATA MEMORY OKUMA/YAZMA VE WRITE-BACK MUX MANTIĞI
-    // ===========================================================================
+    // 7. DATA MEMORY READ/WRITE and WRITE-BACK MUX LOGIC
+
     logic [31:0] mem_read_word;
     logic [31:0] load_data_w;
     
-    // Data Memory'den ham 32-bit veriyi oku
     assign mem_read_word = data_mem[alu_res_w[12:2]];
 
-    // Load İşlemleri için Byte/Halfword ayıklama ve Sign Extension (İşaret Genişletme)
     always_comb begin
-        load_data_w = mem_read_word; // Varsayılan (LW)
+        load_data_w = mem_read_word; // LW
         case (funct3_w)
             3'b000: begin // LBU (Load Byte Unsigned)
                 if (alu_res_w[1:0] == 2'b00) load_data_w = {24'b0, mem_read_word[7:0]};
@@ -191,22 +181,22 @@ module riscv_singlecycle import riscv_pkg::*; #(
         endcase
     end
 
-    // Write-Back MUX: Register'a Hangi Veri Gidecek?
+    // Write-Back MUX
     always_comb begin
         case (wb_sel_w)
-            2'b00: wb_data_w = alu_res_w;       // ALU Sonucu
-            2'b01: wb_data_w = load_data_w;     // Bellekten Okunan (Ayıklanmış) Veri
-            2'b10: wb_data_w = pc_reg + 32'd4;  // JAL/JALR için Dönüş Adresi
-            2'b11: wb_data_w = imm_w;           // Doğrudan Immediate (LUI için)
+            2'b00: wb_data_w = alu_res_w;       
+            2'b01: wb_data_w = load_data_w;     
+            2'b10: wb_data_w = pc_reg + 32'd4;  
+            2'b11: wb_data_w = imm_w;           
             default: wb_data_w = 32'b0;
         endcase
     end
 
-    // Store İşlemleri (Byte/Halfword yazma) ve Belleğe Yazma Mantığı
+    // Store and Write Memory Logic
     logic [31:0] mem_write_word;
     
     always_comb begin
-        mem_write_word = mem_read_word; // Read-Modify-Write mantığı
+        mem_write_word = mem_read_word; 
         if (mem_we_w) begin
             case (funct3_w)
                 3'b000: begin // SB
@@ -219,12 +209,12 @@ module riscv_singlecycle import riscv_pkg::*; #(
                     if (alu_res_w[1] == 1'b0) mem_write_word[15:0]  = rs2_data_w[15:0];
                     if (alu_res_w[1] == 1'b1) mem_write_word[31:16] = rs2_data_w[15:0];
                 end
-                default: mem_write_word = rs2_data_w; // SW
+                default: mem_write_word = rs2_data_w; 
             endcase
         end
     end
 
-    // Data Memory Yazma İşlemi (Senkron)
+    // Data Memory Writing (Sync.)
     always_ff @(posedge clk_i) begin
         if (mem_we_w) begin
             data_mem[alu_res_w[12:2]] <= mem_write_word;
@@ -232,16 +222,17 @@ module riscv_singlecycle import riscv_pkg::*; #(
     end
 
 
-    // ===========================================================================
-    // 8. TESTBENCH VE ÇIKIŞ PORTLARI (PDF ZORUNLULUKLARI)
-    // ===========================================================================
-    assign update_o   = rstn_i;        // Reset dışındayken her vuruşta update geçerli
-    assign pc_o       = pc_reg;        // Mevcut PC
-    assign instr_o    = instr_w;       // Çalışan Komut
-    assign reg_addr_o = (reg_we_w && !mem_we_w) ? rd_addr_w : 5'b0;     // Hedef Register Adresi
-    assign reg_data_o = (reg_we_w && !mem_we_w) ? wb_data_w : 32'b0;     // Register'a yazılan veya ALU'dan çıkan veri
-    assign mem_addr_o = alu_res_w;     // Bellek Erişim Adresi
-    assign mem_data_o = mem_write_word;// Belleğe yazılan veri
-    assign mem_wrt_o  = mem_we_w;      // Bellek Yazma Yetkisi
+    // 8. TESTBENCH VE OUTPUT PORTS 
+
+    assign update_o   = rstn_i;       
+    assign pc_o       = pc_reg;        
+    assign instr_o    = instr_w;       
+    // Retired Register Address and Data are gated to ensure valid retired data during Store instructions
+    assign reg_addr_o = (reg_we_w && !mem_we_w) ? rd_addr_w : 5'b0;     
+    assign reg_data_o = (reg_we_w && !mem_we_w) ? wb_data_w : 32'b0;    
+
+    assign mem_addr_o = alu_res_w;     
+    assign mem_data_o = mem_write_word;
+    assign mem_wrt_o  = mem_we_w;     
 
 endmodule

@@ -5,26 +5,26 @@ module decoder import riscv_pkg::*; (
     input  logic        clk_i,   
     input  logic [31:0] instr_i,
     
-    // VERİ YOLU (DATAPATH) ADRES VE DEĞER ÇIKIŞLARI
+    // DATAPATH ADDRESS AND VALUE OUTPUTS
     output logic [4:0]  rs1_addr_o,
     output logic [4:0]  rs2_addr_o,
     output logic [4:0]  rd_addr_o,
-    output logic [31:0] imm_o,         // Kendi HW1 mantığınla çözülmüş Anlık Değer
+    output logic [31:0] imm_o,         
     
-    // KONTROL SİNYALLERİ (Control Unit Outputs)
-    output logic        reg_we_o,      // Register'a yazma izni (Register File we_i)
-    output logic        alu_src_o,     // ALU B girişi: 0 = RS2, 1 = IMM
-    output logic        pc_to_alu_o,   // ALU A girişi: 0 = RS1, 1 = PC (AUIPC için)
-    output logic [3:0]  alu_ctrl_o,    // ALU'ya gidecek 4-bitlik işlem komutu
-    output logic        mem_we_o,      // Data Memory'ye yazma izni
-    output logic [1:0]  wb_sel_o,      // RegFile'a ne yazılacak? 00:ALU, 01:Mem, 10:PC+4, 11:IMM
-    output logic        branch_o,      // Komut bir dallanma mı?
-    output logic [2:0]  branch_type_o, // Hangi dallanma türü? (BEQ, BNE vs. için funct3)
-    output logic        jump_o,        // JAL veya JALR mi?
-    output logic        jalr_o         // PC = RS1 + IMM mi olacak?
+    // Control Unit Outputs
+    output logic        reg_we_o,      // Register Write Enable (Register File we_i)
+    output logic        alu_src_o,     // ALU B source: 0 = RS2, 1 = IMM
+    output logic        pc_to_alu_o,   // ALU A source: 0 = RS1, 1 = PC (for AUIPC)
+    output logic [3:0]  alu_ctrl_o,    // 4-bit operation command for the ALU
+    output logic        mem_we_o,      // Data Memory Write Enable
+    output logic [1:0]  wb_sel_o,      // Write-Back selector: 00:ALU, 01:Mem, 10:PC+4, 11:IMM
+    output logic        branch_o,      // Instruction is a branch?
+    output logic [2:0]  branch_type_o, // Branch type (funct3 for BEQ, BNE, etc.)
+    output logic        jump_o,        // Instruction is a Jump (JAL or JALR)?
+    output logic        jalr_o         // Target PC is RS1 + IMM?
 );
 
-    // 1. ADIM: Sinyalleri senin Custom ISA'na göre ayıklama
+    // 1st step :  Extracting signals according to the Custom ISA
     logic [6:0] opcode;
     logic [2:0] funct3;
 
@@ -34,14 +34,14 @@ module decoder import riscv_pkg::*; (
     assign funct3     = instr_i[7:5];
     assign rd_addr_o  = instr_i[4:0];
 
-    // 2. ADIM: Kombinasyonel Çözümleme Mantığı
+    // 2nd step: Combinational Decoding Logic
     always_comb begin
-        // Varsayılan değerler (LATCH oluşumunu engellemek için her şey 0)
+        // default calues
         imm_o         = '0;
         reg_we_o      = 1'b0;
         alu_src_o     = 1'b0;
         pc_to_alu_o   = 1'b0;
-        alu_ctrl_o    = 4'b0000; // Varsayılan ALU: ADD
+        alu_ctrl_o    = 4'b0000; // default ALU: ADD
         mem_we_o      = 1'b0;
         wb_sel_o      = 2'b00;
         branch_o      = 1'b0;
@@ -49,22 +49,22 @@ module decoder import riscv_pkg::*; (
         jump_o        = 1'b0;
         jalr_o        = 1'b0;
 
-        // 3. ADIM: Opcode'a Göre Yönlendirme
+        // 3rd step: Routing based on Opcode
         case (opcode)
             
             // LUI
             7'b1110101: begin 
                 reg_we_o = 1'b1;
-                wb_sel_o = 2'b11; // IMM değerini doğrudan Register'a yaz
+                wb_sel_o = 2'b11; 
                 imm_o    = {instr_i[31:20], instr_i[12:5], 12'b0};
             end
 
             // AUIPC
             7'b1110100: begin 
                 reg_we_o    = 1'b1;
-                wb_sel_o    = 2'b00; // ALU sonucunu (PC + IMM) yaz
-                pc_to_alu_o = 1'b1;  // ALU A girişi PC olsun
-                alu_src_o   = 1'b1;  // ALU B girişi IMM olsun
+                wb_sel_o    = 2'b00; 
+                pc_to_alu_o = 1'b1;  
+                alu_src_o   = 1'b1; 
                 alu_ctrl_o  = 4'b0000; // ADD
                 imm_o       = {instr_i[31:20], instr_i[12:5], 12'b0};
             end
@@ -72,7 +72,7 @@ module decoder import riscv_pkg::*; (
             // JAL 
             7'b1101111: begin 
                 reg_we_o = 1'b1;
-                wb_sel_o = 2'b10; // PC+4 değerini Register'a (genelde x1) yaz
+                wb_sel_o = 2'b10;
                 jump_o   = 1'b1;
                 imm_o    = { {11{instr_i[31]}}, instr_i[31], instr_i[12:5], instr_i[20], instr_i[30:21], 1'b0 };
             end
@@ -80,52 +80,52 @@ module decoder import riscv_pkg::*; (
             // JALR 
             7'b1100111: begin 
                 reg_we_o = 1'b1;
-                wb_sel_o = 2'b10; // PC+4 değerini Register'a yaz
+                wb_sel_o = 2'b10; 
                 jump_o   = 1'b1;
-                jalr_o   = 1'b1;  // Hedef adres RS1 + IMM olarak hesaplanacak
+                jalr_o   = 1'b1;
                 imm_o    = { {20{instr_i[31]}}, instr_i[31:20] };
             end
 
-            // Branch (Dallanma)
+            // Branch 
             7'b1100011: begin 
                 branch_o      = 1'b1;
-                branch_type_o = funct3; // BEQ, BNE kontrolü için dışarı veriyoruz
-                alu_src_o     = 1'b0;   // Karşılaştırma için ALU B = RS2
-                alu_ctrl_o    = 4'b1000; // SUB (Birbirinden çıkarıp zero bayrağına bakacağız)
+                branch_type_o = funct3; 
+                alu_src_o     = 1'b0;   
+                alu_ctrl_o    = 4'b1000; // SUB 
                 imm_o         = { {19{instr_i[31]}}, instr_i[31], instr_i[0], instr_i[30:25], instr_i[4:1], 1'b0 };
             end
 
-            // Load (Okuma)
+            // Load 
             7'b1100000: begin 
                 reg_we_o   = 1'b1;
-                wb_sel_o   = 2'b01;   // Mem'den geleni Register'a yaz
-                alu_src_o  = 1'b1;    // Adres hesabı için ALU B = IMM
-                alu_ctrl_o = 4'b0000; // Adres hesabı: RS1 + IMM (ADD)
+                wb_sel_o   = 2'b01;   
+                alu_src_o  = 1'b1;    
+                alu_ctrl_o = 4'b0000; 
                 imm_o      = { {20{instr_i[31]}}, instr_i[31:20] };
             end
 
-            // Store (Yazma)
+            // Store 
             7'b1100001: begin 
-                mem_we_o   = 1'b1;    // Belleğe yazma izni!
-                alu_src_o  = 1'b1;    // Adres hesabı için ALU B = IMM
-                alu_ctrl_o = 4'b0000; // Adres hesabı: RS1 + IMM (ADD)
+                mem_we_o   = 1'b1;    
+                alu_src_o  = 1'b1;   
+                alu_ctrl_o = 4'b0000; 
                 imm_o      = { {20{instr_i[31]}}, instr_i[31:25], instr_i[4:0] };
             end
 
-            // I-Type Aritmetik/Mantık
+            // I-Type 
             7'b1100100: begin 
                 reg_we_o   = 1'b1;
-                wb_sel_o   = 2'b00; // ALU sonucunu Register'a yaz
+                wb_sel_o   = 2'b00; 
                 alu_src_o  = 1'b1;  // ALU B = IMM
 
-                // Senin Shift ve Arithmetic ayrımın:
+                // Shift and Arithmetic logic
                 if (funct3 == 3'b001 || funct3 == 3'b101) begin
                     imm_o = { 27'b0, instr_i[24:20] }; 
                 end else begin
                     imm_o = { {20{instr_i[31]}}, instr_i[31:20] };
                 end
                 
-                // ALU İşlem Kodunu (alu.sv'deki kodlara göre) atıyoruz
+                //Assign ALU Operation Code (based on alu.sv definitions)
                 case (funct3)
                     3'b000: alu_ctrl_o = 4'b0000; // ADDI
                     3'b010: alu_ctrl_o = 4'b0010; // SLTI
@@ -144,10 +144,10 @@ module decoder import riscv_pkg::*; (
                 endcase
             end
 
-            // R-Type Aritmetik/Mantık
+            // R-Type
             7'b1110001: begin 
                 reg_we_o  = 1'b1;
-                wb_sel_o  = 2'b00; // ALU sonucunu Register'a yaz
+                wb_sel_o  = 2'b00; 
                 alu_src_o = 1'b0;  // ALU B = RS2
 
                 case (funct3)
@@ -169,7 +169,7 @@ module decoder import riscv_pkg::*; (
                 endcase
             end
 
-            default: ; // Bilinmeyen opcode durumunda her şey varsayılan 0'da kalır
+            default: ; // all signals remain at 0 for unknown opcodes
         endcase
     end
 
