@@ -92,7 +92,7 @@ module riscv_singlecycle import riscv_pkg::*; #(
     register_file u_regfile (
         .clk_i      (clk_i),
         .rstn_i     (rstn_i),
-        .we_i       (reg_we_w),
+        .we_i       (reg_we_w && !mem_we_w),
         .rs1_addr_i (rs1_addr_w),
         .rs2_addr_i (rs2_addr_w),
         .rd_addr_i  (rd_addr_w),
