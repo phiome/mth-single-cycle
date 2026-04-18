@@ -1,7 +1,7 @@
 /* verilator lint_off UNUSEDSIGNAL */
-import riscv_pkg::*; // Struct yerine standart paketimizi ekledik
 
-module decoder (
+
+module decoder import riscv_pkg::*; (
     input  logic        clk_i,   
     input  logic [31:0] instr_i,
     

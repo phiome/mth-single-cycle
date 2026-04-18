@@ -1,6 +1,6 @@
-import riscv_pkg::*;
 
-module riscv_singlecycle #(
+
+module riscv_singlecycle import riscv_pkg::*; #(
     parameter DMemInitFile = "dmem.mem",
     parameter IMemInitFile = "imem.mem"
 ) (
@@ -32,7 +32,7 @@ module riscv_singlecycle #(
     end
 
     // Testbench'in arkadan belleği okuması için gerekli atama
-    assign data_o = data_mem[addr_i[31:2]]; 
+    assign data_o = data_mem[addr_i[12:2]]; 
 
     // ===========================================================================
     // 2. PROGRAM COUNTER (PC) VE FETCH MANTIĞI
@@ -48,7 +48,7 @@ module riscv_singlecycle #(
     end
 
     // Instruction Memory'den komut çekme (Fetch). PC 4'er arttığı için 4'e bölüyoruz (>> 2)
-    assign instr_w = instr_mem[pc_reg[31:2]];
+    assign instr_w = instr_mem[pc_reg[12:2]];
 
 
     // ===========================================================================
@@ -60,7 +60,7 @@ module riscv_singlecycle #(
     logic [1:0]  wb_sel_w;
     logic [3:0]  alu_ctrl_w;
     logic [2:0]  funct3_w;
-    
+    logic [2:0]  unused_branch_type;
     // Custom ISA'na göre funct3 her zaman [7:5] bitleri arasındadır
     assign funct3_w = instr_w[7:5];
 
@@ -78,7 +78,7 @@ module riscv_singlecycle #(
         .mem_we_o      (mem_we_w),
         .wb_sel_o      (wb_sel_w),
         .branch_o      (branch_w),
-        .branch_type_o (), // Doğrudan funct3_w kullanacağımız için boşa çıkarıyoruz
+        .branch_type_o (unused_branch_type), // Doğrudan funct3_w kullanacağımız için boşa çıkarıyoruz
         .jump_o        (jump_w),
         .jalr_o        (jalr_w)
     );
@@ -161,7 +161,7 @@ module riscv_singlecycle #(
     logic [31:0] load_data_w;
     
     // Data Memory'den ham 32-bit veriyi oku
-    assign mem_read_word = data_mem[alu_res_w[31:2]];
+    assign mem_read_word = data_mem[alu_res_w[12:2]];
 
     // Load İşlemleri için Byte/Halfword ayıklama ve Sign Extension (İşaret Genişletme)
     always_comb begin
@@ -227,7 +227,7 @@ module riscv_singlecycle #(
     // Data Memory Yazma İşlemi (Senkron)
     always_ff @(posedge clk_i) begin
         if (mem_we_w) begin
-            data_mem[alu_res_w[31:2]] <= mem_write_word;
+            data_mem[alu_res_w[12:2]] <= mem_write_word;
         end
     end
 

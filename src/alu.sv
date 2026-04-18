@@ -1,6 +1,6 @@
-import riscv_pkg::*;
 
-module alu (
+
+module alu import riscv_pkg::*; (
     input  logic [XLEN-1:0] a_i,        // 1. İşlenen (RS1'den gelir)
     input  logic [XLEN-1:0] b_i,        // 2. İşlenen (RS2'den veya Immediate'ten gelir)
     input  logic [3:0]      alu_ctrl_i, // İşlem Seçici Sinyal

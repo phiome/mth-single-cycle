@@ -1,6 +1,6 @@
-import riscv_pkg::*;
 
-module register_file (
+
+module register_file import riscv_pkg::*; (
     input  logic             clk_i,
     input  logic             rstn_i,
     input  logic             we_i,          // Write Enable
