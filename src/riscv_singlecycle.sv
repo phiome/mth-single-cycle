@@ -238,8 +238,8 @@ module riscv_singlecycle import riscv_pkg::*; #(
     assign update_o   = rstn_i;        // Reset dışındayken her vuruşta update geçerli
     assign pc_o       = pc_reg;        // Mevcut PC
     assign instr_o    = instr_w;       // Çalışan Komut
-    assign reg_addr_o = reg_we_w ? rd_addr_w : 5'b0;     // Hedef Register Adresi
-    assign reg_data_o = reg_we_w ? wb_data_w : 32'b0;     // Register'a yazılan veya ALU'dan çıkan veri
+    assign reg_addr_o = (reg_we_w && !mem_we_w) ? rd_addr_w : 5'b0;     // Hedef Register Adresi
+    assign reg_data_o = (reg_we_w && !mem_we_w) ? wb_data_w : 32'b0;     // Register'a yazılan veya ALU'dan çıkan veri
     assign mem_addr_o = alu_res_w;     // Bellek Erişim Adresi
     assign mem_data_o = mem_write_word;// Belleğe yazılan veri
     assign mem_wrt_o  = mem_we_w;      // Bellek Yazma Yetkisi
