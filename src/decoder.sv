@@ -2,7 +2,7 @@
 import riscv_pkg::*; // Struct yerine standart paketimizi ekledik
 
 module decoder (
-    input  logic        clk_i,   // Verilator uyarılarını engellemek için
+    input  logic        clk_i,   
     input  logic [31:0] instr_i,
     
     // VERİ YOLU (DATAPATH) ADRES VE DEĞER ÇIKIŞLARI
@@ -174,3 +174,4 @@ module decoder (
     end
 
 endmodule
+
