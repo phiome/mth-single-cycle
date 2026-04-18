@@ -43,7 +43,7 @@ module riscv_singlecycle import riscv_pkg::*; #(
 
     // Saat sinyaline bağlı PC güncellemesi (Reset'te 0'a döner)
     always_ff @(posedge clk_i or negedge rstn_i) begin
-        if (!rstn_i) pc_reg <= 32'b0;
+        if (!rstn_i) pc_reg <= 32'h80000000;
         else         pc_reg <= next_pc;
     end
 
